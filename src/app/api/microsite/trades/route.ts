@@ -71,7 +71,7 @@ export async function GET() {
         // }));
 
         // Return empty array now for testing
-        let data: MicrositeTrades[] = [];
+        const data: MicrositeTrades[] = [];
 
         return NextResponse.json(data, { status: 200 });
     } catch (error) {
