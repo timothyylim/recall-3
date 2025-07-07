@@ -1,0 +1,376 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model baseline_applied__ {
+  applied_at DateTime @default(now()) @db.Timestamptz(6)
+  version    String   @default("baseline-v1") @db.VarChar(50)
+
+  @@map("__baseline_applied__")
+  @@ignore
+}
+
+model admins {
+  id            String       @id @db.Uuid
+  username      String       @unique(map: "admins_username_unique") @db.VarChar(50)
+  email         String       @unique(map: "admins_email_unique") @db.VarChar(100)
+  password_hash String       @db.VarChar(255)
+  api_key       String?      @unique(map: "admins_api_key_unique") @db.VarChar(400)
+  name          String?      @db.VarChar(100)
+  image_url     String?
+  metadata      Json?
+  status        actor_status @default(active)
+  last_login_at DateTime?    @db.Timestamptz(6)
+  created_at    DateTime     @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime     @default(now()) @db.Timestamptz(6)
+
+  @@index([api_key], map: "idx_admins_api_key")
+  @@index([email], map: "idx_admins_email")
+  @@index([status], map: "idx_admins_status")
+  @@index([username], map: "idx_admins_username")
+}
+
+model agent_nonces {
+  id         String    @id @db.Uuid
+  agent_id   String    @db.Uuid
+  nonce      String    @unique(map: "agent_nonces_nonce_unique") @db.VarChar(100)
+  expires_at DateTime  @db.Timestamptz(6)
+  created_at DateTime  @default(now()) @db.Timestamptz(6)
+  used_at    DateTime? @db.Timestamptz(6)
+  agents     agents    @relation(fields: [agent_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([agent_id], map: "idx_agent_nonces_agent_id")
+  @@index([expires_at], map: "idx_agent_nonces_expires_at")
+  @@index([nonce], map: "idx_agent_nonces_nonce")
+}
+
+model agent_rank {
+  id         String   @id @db.Uuid
+  agent_id   String   @unique(map: "unique_agent_rank_agent_id") @db.Uuid
+  mu         Float
+  sigma      Float
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+  ordinal    Float
+  agents     agents   @relation(fields: [agent_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([agent_id], map: "idx_agent_rank_agent_id")
+}
+
+model agent_rank_history {
+  id             String       @id @db.Uuid
+  agent_id       String       @db.Uuid
+  competition_id String       @db.Uuid
+  mu             Float
+  sigma          Float
+  created_at     DateTime     @default(now()) @db.Timestamptz(6)
+  ordinal        Float
+  agents         agents       @relation(fields: [agent_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  competitions   competitions @relation(fields: [competition_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([agent_id, competition_id], map: "idx_agent_rank_history_agent_competition")
+  @@index([agent_id], map: "idx_agent_rank_history_agent_id")
+  @@index([competition_id], map: "idx_agent_rank_history_competition_id")
+}
+
+model agents {
+  id                       String                     @id @db.Uuid
+  owner_id                 String                     @db.Uuid
+  wallet_address           String?                    @unique @db.VarChar(42)
+  name                     String                     @db.VarChar(100)
+  description              String?
+  image_url                String?
+  api_key                  String                     @unique @db.VarChar(400)
+  metadata                 Json?
+  status                   actor_status               @default(active)
+  deactivation_reason      String?
+  deactivation_date        DateTime?                  @db.Timestamptz(6)
+  created_at               DateTime                   @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime                   @default(now()) @db.Timestamptz(6)
+  email                    String?                    @unique(map: "agents_email_unique") @db.VarChar(100)
+  agent_nonces             agent_nonces[]
+  agent_rank               agent_rank?
+  agent_rank_history       agent_rank_history[]
+  users                    users                      @relation(fields: [owner_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  competition_agents       competition_agents[]
+  competitions_leaderboard competitions_leaderboard[]
+  object_index             object_index[]
+  votes                    votes[]
+  votes_performed          votes_performed[]
+
+  @@unique([owner_id, name])
+  @@index([api_key], map: "idx_agents_api_key")
+  @@index([owner_id], map: "idx_agents_owner_id")
+  @@index([status], map: "idx_agents_status")
+  @@index([wallet_address], map: "idx_agents_wallet_address")
+}
+
+model competition_agents {
+  competition_id      String                   @db.Uuid
+  agent_id            String                   @db.Uuid
+  created_at          DateTime                 @default(now()) @db.Timestamptz(6)
+  status              competition_agent_status @default(active)
+  deactivation_reason String?
+  deactivated_at      DateTime?                @db.Timestamptz(6)
+  updated_at          DateTime                 @default(now()) @db.Timestamptz(6)
+  agents              agents                   @relation(fields: [agent_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  competitions        competitions             @relation(fields: [competition_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([competition_id, agent_id])
+  @@index([agent_id], map: "idx_competition_agents_agent_id")
+  @@index([competition_id], map: "idx_competition_agents_competition_id")
+  @@index([deactivated_at], map: "idx_competition_agents_deactivated_at")
+  @@index([status], map: "idx_competition_agents_status")
+}
+
+model competitions {
+  id                       String                     @id @db.Uuid
+  name                     String                     @db.VarChar(100)
+  description              String?
+  external_url             String?
+  image_url                String?
+  start_date               DateTime?                  @db.Timestamptz(6)
+  end_date                 DateTime?                  @db.Timestamptz(6)
+  status                   competition_status
+  created_at               DateTime?                  @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime?                  @default(now()) @db.Timestamptz(6)
+  type                     competition_type           @default(trading)
+  voting_start_date        DateTime?                  @db.Timestamptz(6)
+  voting_end_date          DateTime?                  @db.Timestamptz(6)
+  sandbox_mode             Boolean                    @default(false)
+  agent_rank_history       agent_rank_history[]
+  competition_agents       competition_agents[]
+  competitions_leaderboard competitions_leaderboard[]
+  object_index             object_index[]
+  votes                    votes[]
+
+  @@index([status], map: "idx_competitions_status")
+}
+
+model competitions_leaderboard {
+  id             String       @id @db.Uuid
+  agent_id       String       @db.Uuid
+  competition_id String       @db.Uuid
+  rank           Int
+  score          Decimal      @db.Decimal(30, 15)
+  created_at     DateTime     @default(now()) @db.Timestamptz(6)
+  agents         agents       @relation(fields: [agent_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  competitions   competitions @relation(fields: [competition_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([agent_id, competition_id], map: "idx_competitions_leaderboard_agent_competition")
+  @@index([agent_id], map: "idx_competitions_leaderboard_agent_id")
+  @@index([competition_id], map: "idx_competitions_leaderboard_competition_id")
+}
+
+model epochs {
+  id               String             @id @db.Uuid
+  number           Int                @unique(map: "epochs_number_unique") @default(autoincrement())
+  started_at       DateTime           @db.Timestamptz(6)
+  ended_at         DateTime?          @db.Timestamptz(6)
+  rewards          rewards[]
+  rewards_roots    rewards_roots?
+  rewards_tree     rewards_tree[]
+  stakes           stakes[]
+  vote_assignments vote_assignments[]
+  votes_available  votes_available[]
+  votes_performed  votes_performed[]
+}
+
+model object_index {
+  id              String         @id @db.Uuid
+  competition_id  String?        @db.Uuid
+  agent_id        String?        @db.Uuid
+  data_type       sync_data_type
+  size_bytes      BigInt?
+  metadata        Json?
+  event_timestamp DateTime?      @db.Timestamptz(6)
+  created_at      DateTime       @default(now()) @db.Timestamptz(6)
+  data            String
+  agents          agents?        @relation(fields: [agent_id], references: [id], onUpdate: NoAction)
+  competitions    competitions?  @relation(fields: [competition_id], references: [id], onUpdate: NoAction)
+
+  @@index([agent_id], map: "idx_object_index_agent_id")
+  @@index([competition_id, agent_id], map: "idx_object_index_competition_agent")
+  @@index([competition_id], map: "idx_object_index_competition_id")
+  @@index([created_at], map: "idx_object_index_created_at")
+  @@index([data_type], map: "idx_object_index_data_type")
+}
+
+model rewards {
+  id         String   @id @db.Uuid
+  epoch      String   @db.Uuid
+  address    String   @db.VarChar(50)
+  amount     Decimal  @db.Decimal(78, 0)
+  leaf_hash  Bytes
+  claimed    Boolean  @default(false)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+  epochs     epochs   @relation(fields: [epoch], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "rewards_epoch_epochs_id_fk")
+
+  @@index([address], map: "idx_rewards_address")
+  @@index([epoch], map: "idx_rewards_epoch")
+}
+
+model rewards_roots {
+  id         String   @id @db.Uuid
+  epoch      String   @unique(map: "uq_rewards_roots_epoch") @db.Uuid
+  root_hash  Bytes
+  tx         String
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  epochs     epochs   @relation(fields: [epoch], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "rewards_roots_epoch_epochs_id_fk")
+}
+
+model rewards_tree {
+  id         String   @id @db.Uuid
+  epoch      String   @db.Uuid
+  level      Int
+  idx        Int
+  hash       Bytes
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  epochs     epochs   @relation(fields: [epoch], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "rewards_tree_epoch_epochs_id_fk")
+
+  @@index([epoch, level, idx], map: "idx_rewards_tree_epoch_level_idx")
+  @@index([level, hash], map: "idx_rewards_tree_level_hash")
+  @@index([level, idx], map: "idx_rewards_tree_level_idx")
+}
+
+model stakes {
+  id                 String             @id @db.Uuid
+  user_id            String?            @db.Uuid
+  amount             Decimal            @db.Decimal(78, 0)
+  address            String             @db.VarChar(50)
+  withdrawn_at       DateTime?          @db.Timestamp(6)
+  epoch_created      String             @db.Uuid
+  created_at         DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime           @default(now()) @db.Timestamptz(6)
+  token_id           BigInt
+  staked_at          DateTime           @db.Timestamp(6)
+  can_unstake_after  DateTime           @db.Timestamp(6)
+  unstaked_at        DateTime?          @db.Timestamp(6)
+  can_withdraw_after DateTime?          @db.Timestamp(6)
+  relocked_at        DateTime?          @db.Timestamp(6)
+  epochs             epochs             @relation(fields: [epoch_created], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "stakes_epoch_created_epochs_id_fk")
+  users              users?             @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "stakes_user_id_users_id_fk")
+  vote_assignments   vote_assignments[]
+
+  @@index([address], map: "idx_stakes_address")
+}
+
+model users {
+  id               String             @id @db.Uuid
+  wallet_address   String             @unique(map: "users_wallet_address_unique") @db.VarChar(42)
+  name             String?            @db.VarChar(100)
+  email            String?            @unique(map: "users_email_unique") @db.VarChar(100)
+  image_url        String?
+  metadata         Json?
+  status           actor_status       @default(active)
+  created_at       DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime           @default(now()) @db.Timestamptz(6)
+  agents           agents[]
+  stakes           stakes[]
+  vote_assignments vote_assignments[]
+  votes            votes[]
+  votes_performed  votes_performed[]
+
+  @@index([status], map: "idx_users_status")
+  @@index([wallet_address], map: "idx_users_wallet_address")
+}
+
+model vote_assignments {
+  stake_id   String   @db.Uuid
+  user_id    String   @db.Uuid
+  epoch      String   @db.Uuid
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  amount     Decimal  @db.Decimal(78, 0)
+  epochs     epochs   @relation(fields: [epoch], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "vote_assignments_epoch_epochs_id_fk")
+  stakes     stakes   @relation(fields: [stake_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "vote_assignments_stake_id_stakes_id_fk")
+  users      users    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "vote_assignments_user_id_users_id_fk")
+
+  @@id([stake_id, user_id, epoch])
+  @@index([epoch], map: "idx_vote_assignments_epoch")
+  @@index([user_id, epoch], map: "idx_vote_assignments_user_epoch")
+}
+
+model votes {
+  id             String       @id @db.Uuid
+  user_id        String       @db.Uuid
+  agent_id       String       @db.Uuid
+  competition_id String       @db.Uuid
+  created_at     DateTime     @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime     @default(now()) @db.Timestamptz(6)
+  agents         agents       @relation(fields: [agent_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  competitions   competitions @relation(fields: [competition_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users          users        @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, agent_id, competition_id], map: "votes_user_agent_competition_key")
+  @@index([agent_id, competition_id], map: "idx_votes_agent_competition")
+  @@index([competition_id], map: "idx_votes_competition_id")
+  @@index([user_id, competition_id], map: "idx_votes_user_competition")
+}
+
+model votes_available {
+  epoch            String   @db.Uuid
+  amount           Decimal  @db.Decimal(78, 0)
+  created_at       DateTime @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime @default(now()) @db.Timestamptz(6)
+  address          String   @db.VarChar(50)
+  block_number     BigInt?
+  transaction_hash String?  @db.VarChar(66)
+  log_index        Int?
+  epochs           epochs   @relation(fields: [epoch], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "votes_available_epoch_epochs_id_fk")
+
+  @@id([address, epoch])
+}
+
+model votes_performed {
+  user_id    String   @db.Uuid
+  agent_id   String   @db.Uuid
+  epoch      String   @db.Uuid
+  amount     Decimal  @db.Decimal(78, 0)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+  agents     agents   @relation(fields: [agent_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "votes_performed_agent_id_agents_id_fk")
+  epochs     epochs   @relation(fields: [epoch], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "votes_performed_epoch_epochs_id_fk")
+  users      users    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "votes_performed_user_id_users_id_fk")
+
+  @@id([user_id, agent_id, epoch])
+  @@index([agent_id, epoch], map: "idx_votes_performed_agent_epoch")
+  @@index([epoch], map: "idx_votes_performed_epoch")
+}
+
+enum actor_status {
+  active
+  inactive
+  suspended
+  deleted
+}
+
+enum competition_agent_status {
+  active
+  withdrawn
+  disqualified
+}
+
+enum competition_status {
+  pending
+  active
+  ended
+}
+
+enum competition_type {
+  trading
+}
+
+enum sync_data_type {
+  trade
+  agent_rank_history
+  agent_rank
+  competitions_leaderboard
+  portfolio_snapshot
+}
