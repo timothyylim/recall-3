@@ -1,6 +1,7 @@
-import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { NextResponse } from "next/server";
+import { PrismaClient } from "@prisma/client";
 
+// Instantiate Prisma Client
 const prisma = new PrismaClient();
 
 interface MicrositeStats {
@@ -10,34 +11,26 @@ interface MicrositeStats {
     totalChainsTraded: number;
 }
 
-// Interface for the parsed trade data from object_index.data
-interface TradeData {
-    tradeAmountUsd?: number | string;
-    fromToken?: string;
-    toToken?: string;
-    toTokenSymbol?: string;
-    fromSpecificChain?: string | null;
-    toSpecificChain?: string | null;
-    fromChain?: string;
-    toChain?: string;
-}
-
 export async function GET() {
     try {
         // Define the cutoff time: 9 AM ET (UTC-4) = 1 PM UTC, June 4, 2025
         const cutoffTime = new Date("2025-06-04T13:00:00Z");
 
         // Fetch trades with cutoff
-        const trades = await prisma.object_index.findMany({
+        const trades = await prisma.trades.findMany({
             where: {
-                data_type: "trade",
-                event_timestamp: {
+                timestamp: {
                     lte: cutoffTime, // Only include trades on or before 1 PM UTC
                 },
             },
             select: {
                 id: true,
-                data: true,
+                trade_amount_usd: true,
+                to_token_symbol: true,
+                from_specific_chain: true,
+                to_specific_chain: true,
+                from_chain: true,
+                to_chain: true,
             },
         });
 
@@ -50,28 +43,20 @@ export async function GET() {
         const chainSet = new Set<string>();
 
         trades.forEach((trade) => {
-            let tradeData: TradeData;
-            try {
-                tradeData = JSON.parse(trade.data);
-            } catch (e) {
-                console.error(`Failed to parse trade data for id ${trade.id}:`, e);
-                tradeData = {};
-            }
+            // Sum trade_amount_usd
+            totalNotionalTradedUsd += Number(trade.trade_amount_usd) || 0;
 
-            // Sum tradeAmountUsd
-            totalNotionalTradedUsd += Number(tradeData.tradeAmountUsd) || 0;
-
-            // Add tokens to set
-            if (tradeData.toTokenSymbol) {
-                tokenSet.add(tradeData.toTokenSymbol);
+            // Add token to set
+            if (trade.to_token_symbol) {
+                tokenSet.add(trade.to_token_symbol);
             }
 
             // Add chains to set
-            if (tradeData.fromSpecificChain || tradeData.fromChain) {
-                chainSet.add(tradeData.fromSpecificChain ?? tradeData.fromChain ?? "");
+            if (trade.from_specific_chain || trade.from_chain) {
+                chainSet.add(trade.from_specific_chain ?? trade.from_chain ?? "");
             }
-            if (tradeData.toSpecificChain || tradeData.toChain) {
-                chainSet.add(tradeData.toSpecificChain ?? tradeData.toChain ?? "");
+            if (trade.to_specific_chain || trade.to_chain) {
+                chainSet.add(trade.to_specific_chain ?? trade.to_chain ?? "");
             }
         });
 
@@ -84,8 +69,8 @@ export async function GET() {
 
         return NextResponse.json(stats, { status: 200 });
     } catch (error) {
-        console.error('Error fetching stats:', error);
-        return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+        console.error("Error fetching stats:", error);
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 });
     } finally {
         await prisma.$disconnect();
     }

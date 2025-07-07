@@ -1,10 +1,12 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  schemas  = ["public", "trading_comps"]
 }
 
 /// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
@@ -14,6 +16,7 @@ model baseline_applied__ {
 
   @@map("__baseline_applied__")
   @@ignore
+  @@schema("public")
 }
 
 model admins {
@@ -34,6 +37,7 @@ model admins {
   @@index([email], map: "idx_admins_email")
   @@index([status], map: "idx_admins_status")
   @@index([username], map: "idx_admins_username")
+  @@schema("public")
 }
 
 model agent_nonces {
@@ -48,6 +52,7 @@ model agent_nonces {
   @@index([agent_id], map: "idx_agent_nonces_agent_id")
   @@index([expires_at], map: "idx_agent_nonces_expires_at")
   @@index([nonce], map: "idx_agent_nonces_nonce")
+  @@schema("public")
 }
 
 model agent_rank {
@@ -61,6 +66,7 @@ model agent_rank {
   agents     agents   @relation(fields: [agent_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([agent_id], map: "idx_agent_rank_agent_id")
+  @@schema("public")
 }
 
 model agent_rank_history {
@@ -77,38 +83,45 @@ model agent_rank_history {
   @@index([agent_id, competition_id], map: "idx_agent_rank_history_agent_competition")
   @@index([agent_id], map: "idx_agent_rank_history_agent_id")
   @@index([competition_id], map: "idx_agent_rank_history_competition_id")
+  @@schema("public")
 }
 
 model agents {
-  id                       String                     @id @db.Uuid
-  owner_id                 String                     @db.Uuid
-  wallet_address           String?                    @unique @db.VarChar(42)
-  name                     String                     @db.VarChar(100)
-  description              String?
-  image_url                String?
-  api_key                  String                     @unique @db.VarChar(400)
-  metadata                 Json?
-  status                   actor_status               @default(active)
-  deactivation_reason      String?
-  deactivation_date        DateTime?                  @db.Timestamptz(6)
-  created_at               DateTime                   @default(now()) @db.Timestamptz(6)
-  updated_at               DateTime                   @default(now()) @db.Timestamptz(6)
-  email                    String?                    @unique(map: "agents_email_unique") @db.VarChar(100)
-  agent_nonces             agent_nonces[]
-  agent_rank               agent_rank?
-  agent_rank_history       agent_rank_history[]
-  users                    users                      @relation(fields: [owner_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  competition_agents       competition_agents[]
-  competitions_leaderboard competitions_leaderboard[]
-  object_index             object_index[]
-  votes                    votes[]
-  votes_performed          votes_performed[]
+  id                        String                      @id @db.Uuid
+  owner_id                  String                      @db.Uuid
+  wallet_address            String?                     @unique @db.VarChar(42)
+  name                      String                      @db.VarChar(100)
+  description               String?
+  image_url                 String?
+  api_key                   String                      @unique @db.VarChar(400)
+  metadata                  Json?
+  status                    actor_status                @default(active)
+  deactivation_reason       String?
+  deactivation_date         DateTime?                   @db.Timestamptz(6)
+  created_at                DateTime                    @default(now()) @db.Timestamptz(6)
+  updated_at                DateTime                    @default(now()) @db.Timestamptz(6)
+  email                     String?                     @unique(map: "agents_email_unique") @db.VarChar(100)
+  is_email_verified         Boolean?                    @default(false)
+  agent_nonces              agent_nonces[]
+  agent_rank                agent_rank?
+  agent_rank_history        agent_rank_history[]
+  users                     users                       @relation(fields: [owner_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  competition_agents        competition_agents[]
+  competitions_leaderboard  competitions_leaderboard[]
+  email_verification_tokens email_verification_tokens[]
+  object_index              object_index[]
+  votes                     votes[]
+  votes_performed           votes_performed[]
+  balances                  balances[]
+  portfolio_snapshots       portfolio_snapshots[]
+  trades                    trades[]
 
   @@unique([owner_id, name])
   @@index([api_key], map: "idx_agents_api_key")
   @@index([owner_id], map: "idx_agents_owner_id")
   @@index([status], map: "idx_agents_status")
   @@index([wallet_address], map: "idx_agents_wallet_address")
+  @@schema("public")
 }
 
 model competition_agents {
@@ -127,6 +140,7 @@ model competition_agents {
   @@index([competition_id], map: "idx_competition_agents_competition_id")
   @@index([deactivated_at], map: "idx_competition_agents_deactivated_at")
   @@index([status], map: "idx_competition_agents_status")
+  @@schema("public")
 }
 
 model competitions {
@@ -149,8 +163,12 @@ model competitions {
   competitions_leaderboard competitions_leaderboard[]
   object_index             object_index[]
   votes                    votes[]
+  portfolio_snapshots      portfolio_snapshots[]
+  trades                   trades[]
+  trading_competitions     trading_competitions?
 
   @@index([status], map: "idx_competitions_status")
+  @@schema("public")
 }
 
 model competitions_leaderboard {
@@ -166,6 +184,23 @@ model competitions_leaderboard {
   @@index([agent_id, competition_id], map: "idx_competitions_leaderboard_agent_competition")
   @@index([agent_id], map: "idx_competitions_leaderboard_agent_id")
   @@index([competition_id], map: "idx_competitions_leaderboard_competition_id")
+  @@schema("public")
+}
+
+model email_verification_tokens {
+  id         String   @id @db.Uuid
+  user_id    String?  @db.Uuid
+  agent_id   String?  @db.Uuid
+  token      String   @unique(map: "email_verification_tokens_token_unique") @db.Char(36)
+  expires_at DateTime @db.Timestamptz(6)
+  used       Boolean? @default(false)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  agents     agents?  @relation(fields: [agent_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users      users?   @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([agent_id, token], map: "idx_email_verification_tokens_agent_id_token")
+  @@index([user_id, token], map: "idx_email_verification_tokens_user_id_token")
+  @@schema("public")
 }
 
 model epochs {
@@ -180,6 +215,8 @@ model epochs {
   vote_assignments vote_assignments[]
   votes_available  votes_available[]
   votes_performed  votes_performed[]
+
+  @@schema("public")
 }
 
 model object_index {
@@ -200,6 +237,7 @@ model object_index {
   @@index([competition_id], map: "idx_object_index_competition_id")
   @@index([created_at], map: "idx_object_index_created_at")
   @@index([data_type], map: "idx_object_index_data_type")
+  @@schema("public")
 }
 
 model rewards {
@@ -215,6 +253,7 @@ model rewards {
 
   @@index([address], map: "idx_rewards_address")
   @@index([epoch], map: "idx_rewards_epoch")
+  @@schema("public")
 }
 
 model rewards_roots {
@@ -224,6 +263,8 @@ model rewards_roots {
   tx         String
   created_at DateTime @default(now()) @db.Timestamptz(6)
   epochs     epochs   @relation(fields: [epoch], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "rewards_roots_epoch_epochs_id_fk")
+
+  @@schema("public")
 }
 
 model rewards_tree {
@@ -238,6 +279,7 @@ model rewards_tree {
   @@index([epoch, level, idx], map: "idx_rewards_tree_epoch_level_idx")
   @@index([level, hash], map: "idx_rewards_tree_level_hash")
   @@index([level, idx], map: "idx_rewards_tree_level_idx")
+  @@schema("public")
 }
 
 model stakes {
@@ -260,26 +302,30 @@ model stakes {
   vote_assignments   vote_assignments[]
 
   @@index([address], map: "idx_stakes_address")
+  @@schema("public")
 }
 
 model users {
-  id               String             @id @db.Uuid
-  wallet_address   String             @unique(map: "users_wallet_address_unique") @db.VarChar(42)
-  name             String?            @db.VarChar(100)
-  email            String?            @unique(map: "users_email_unique") @db.VarChar(100)
-  image_url        String?
-  metadata         Json?
-  status           actor_status       @default(active)
-  created_at       DateTime           @default(now()) @db.Timestamptz(6)
-  updated_at       DateTime           @default(now()) @db.Timestamptz(6)
-  agents           agents[]
-  stakes           stakes[]
-  vote_assignments vote_assignments[]
-  votes            votes[]
-  votes_performed  votes_performed[]
+  id                        String                      @id @db.Uuid
+  wallet_address            String                      @unique(map: "users_wallet_address_unique") @db.VarChar(42)
+  name                      String?                     @db.VarChar(100)
+  email                     String?                     @unique(map: "users_email_unique") @db.VarChar(100)
+  image_url                 String?
+  metadata                  Json?
+  status                    actor_status                @default(active)
+  created_at                DateTime                    @default(now()) @db.Timestamptz(6)
+  updated_at                DateTime                    @default(now()) @db.Timestamptz(6)
+  is_email_verified         Boolean?                    @default(false)
+  agents                    agents[]
+  email_verification_tokens email_verification_tokens[]
+  stakes                    stakes[]
+  vote_assignments          vote_assignments[]
+  votes                     votes[]
+  votes_performed           votes_performed[]
 
   @@index([status], map: "idx_users_status")
   @@index([wallet_address], map: "idx_users_wallet_address")
+  @@schema("public")
 }
 
 model vote_assignments {
@@ -295,6 +341,7 @@ model vote_assignments {
   @@id([stake_id, user_id, epoch])
   @@index([epoch], map: "idx_vote_assignments_epoch")
   @@index([user_id, epoch], map: "idx_vote_assignments_user_epoch")
+  @@schema("public")
 }
 
 model votes {
@@ -312,6 +359,7 @@ model votes {
   @@index([agent_id, competition_id], map: "idx_votes_agent_competition")
   @@index([competition_id], map: "idx_votes_competition_id")
   @@index([user_id, competition_id], map: "idx_votes_user_competition")
+  @@schema("public")
 }
 
 model votes_available {
@@ -326,6 +374,7 @@ model votes_available {
   epochs           epochs   @relation(fields: [epoch], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "votes_available_epoch_epochs_id_fk")
 
   @@id([address, epoch])
+  @@schema("public")
 }
 
 model votes_performed {
@@ -342,6 +391,116 @@ model votes_performed {
   @@id([user_id, agent_id, epoch])
   @@index([agent_id, epoch], map: "idx_votes_performed_agent_epoch")
   @@index([epoch], map: "idx_votes_performed_epoch")
+  @@schema("public")
+}
+
+model balances {
+  id             Int       @id @default(autoincrement())
+  agent_id       String    @db.Uuid
+  token_address  String    @db.VarChar(50)
+  amount         Decimal   @db.Decimal
+  created_at     DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime? @default(now()) @db.Timestamptz(6)
+  specific_chain String    @db.VarChar(20)
+  symbol         String    @db.VarChar(20)
+  agents         agents    @relation(fields: [agent_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([agent_id, token_address])
+  @@index([agent_id], map: "idx_balances_agent_id")
+  @@index([specific_chain], map: "idx_balances_specific_chain")
+  @@schema("trading_comps")
+}
+
+model portfolio_snapshots {
+  id                     Int                      @id @default(autoincrement())
+  agent_id               String                   @db.Uuid
+  competition_id         String                   @db.Uuid
+  timestamp              DateTime?                @default(now()) @db.Timestamptz(6)
+  total_value            Decimal                  @db.Decimal(30, 15)
+  agents                 agents                   @relation(fields: [agent_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  competitions           competitions             @relation(fields: [competition_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  portfolio_token_values portfolio_token_values[]
+
+  @@index([agent_id, competition_id], map: "idx_portfolio_snapshots_agent_competition")
+  @@index([timestamp], map: "idx_portfolio_snapshots_timestamp")
+  @@schema("trading_comps")
+}
+
+model portfolio_token_values {
+  id                    Int                 @id @default(autoincrement())
+  portfolio_snapshot_id Int
+  token_address         String              @db.VarChar(50)
+  amount                Decimal             @db.Decimal
+  value_usd             Decimal             @db.Decimal(30, 15)
+  price                 Decimal             @db.Decimal
+  specific_chain        String?             @db.VarChar(20)
+  symbol                String              @db.VarChar(20)
+  portfolio_snapshots   portfolio_snapshots @relation(fields: [portfolio_snapshot_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([portfolio_snapshot_id], map: "idx_portfolio_token_values_snapshot_id")
+  @@index([specific_chain], map: "idx_portfolio_token_values_specific_chain")
+  @@schema("trading_comps")
+}
+
+model prices {
+  id             Int       @id @default(autoincrement())
+  token          String    @db.VarChar(50)
+  price          Decimal   @db.Decimal
+  timestamp      DateTime? @default(now()) @db.Timestamptz(6)
+  chain          String?   @db.VarChar(10)
+  specific_chain String?   @db.VarChar(20)
+  symbol         String    @db.VarChar(20)
+
+  @@index([chain], map: "idx_prices_chain")
+  @@index([specific_chain], map: "idx_prices_specific_chain")
+  @@index([timestamp], map: "idx_prices_timestamp")
+  @@index([token], map: "idx_prices_token")
+  @@index([token, chain], map: "idx_prices_token_chain")
+  @@index([token, specific_chain], map: "idx_prices_token_specific_chain")
+  @@index([token, timestamp], map: "idx_prices_token_timestamp")
+  @@schema("trading_comps")
+}
+
+model trades {
+  id                  String       @id @db.Uuid
+  agent_id            String       @db.Uuid
+  competition_id      String       @db.Uuid
+  from_token          String       @db.VarChar(50)
+  to_token            String       @db.VarChar(50)
+  from_amount         Decimal      @db.Decimal
+  to_amount           Decimal      @db.Decimal
+  price               Decimal      @db.Decimal
+  trade_amount_usd    Decimal      @db.Decimal
+  to_token_symbol     String       @db.VarChar(20)
+  success             Boolean
+  error               String?
+  reason              String
+  timestamp           DateTime?    @default(now()) @db.Timestamptz(6)
+  from_chain          String?      @db.VarChar(10)
+  to_chain            String?      @db.VarChar(10)
+  from_specific_chain String?      @db.VarChar(20)
+  to_specific_chain   String?      @db.VarChar(20)
+  from_token_symbol   String       @db.VarChar(20)
+  agents              agents       @relation(fields: [agent_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  competitions        competitions @relation(fields: [competition_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([agent_id], map: "idx_trades_agent_id")
+  @@index([competition_id], map: "idx_trades_competition_id")
+  @@index([from_chain], map: "idx_trades_from_chain")
+  @@index([from_specific_chain], map: "idx_trades_from_specific_chain")
+  @@index([timestamp], map: "idx_trades_timestamp")
+  @@index([to_chain], map: "idx_trades_to_chain")
+  @@index([to_specific_chain], map: "idx_trades_to_specific_chain")
+  @@schema("trading_comps")
+}
+
+model trading_competitions {
+  competitionId            String                   @id @db.Uuid
+  cross_chain_trading_type cross_chain_trading_type @default(disallowAll)
+  competitions             competitions             @relation(fields: [competitionId], references: [id], onDelete: Cascade, map: "trading_competitions_competitionId_competitions_id_fk")
+
+  @@index([cross_chain_trading_type], map: "idx_competitions_cross_chain_trading")
+  @@schema("trading_comps")
 }
 
 enum actor_status {
@@ -349,22 +508,30 @@ enum actor_status {
   inactive
   suspended
   deleted
+
+  @@schema("public")
 }
 
 enum competition_agent_status {
   active
   withdrawn
   disqualified
+
+  @@schema("public")
 }
 
 enum competition_status {
   pending
   active
   ended
+
+  @@schema("public")
 }
 
 enum competition_type {
   trading
+
+  @@schema("public")
 }
 
 enum sync_data_type {
@@ -373,4 +540,14 @@ enum sync_data_type {
   agent_rank
   competitions_leaderboard
   portfolio_snapshot
+
+  @@schema("public")
+}
+
+enum cross_chain_trading_type {
+  disallowAll
+  disallowXParent
+  allow
+
+  @@schema("trading_comps")
 }
