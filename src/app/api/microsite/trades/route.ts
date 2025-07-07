@@ -51,7 +51,7 @@ export async function GET() {
             },
         });
 
-        const data: MicrositeTrades[] = trades.map((trade) => ({
+        let data: MicrositeTrades[] = trades.map((trade) => ({
             id: trade.id,
             agentId: trade.agent_id,
             fromAmount: Number(trade.from_amount) || 0,
@@ -69,6 +69,9 @@ export async function GET() {
             toSpecificChain: trade.to_specific_chain ?? null,
             micrositeId: trade.agents?.id ?? "",
         }));
+
+        // Return empty array now for testing
+        data = [];
 
         return NextResponse.json(data, { status: 200 });
     } catch (error) {

@@ -60,11 +60,19 @@ export async function GET() {
             }
         });
 
-        const stats: MicrositeStats = {
+        let stats: MicrositeStats = {
             totalNotionalTradedUsd,
             totalTrades,
             totalTokensTraded: tokenSet.size,
             totalChainsTraded: chainSet.size,
+        };
+
+        // Return empty object now for testing
+        stats = {
+            totalNotionalTradedUsd: 0,
+            totalTrades: 0,
+            totalTokensTraded: 0,
+            totalChainsTraded: 0,
         };
 
         return NextResponse.json(stats, { status: 200 });
