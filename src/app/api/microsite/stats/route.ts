@@ -13,17 +13,15 @@ interface MicrositeStats {
 
 export async function GET() {
     try {
-        // Get competition ID from environment variables
-        const competitionId = process.env.COMPETITION_ID;
+        // Define the cutoff time: 9 AM ET (UTC-4) = 1 PM UTC, June 4, 2025
+        const cutoffTime = new Date("2025-06-04T13:00:00Z");
 
-        if (!competitionId) {
-            throw new Error("COMPETITION_ID not found in environment variables");
-        }
-
-        // Fetch trades with competition ID and cutoff
+        // Fetch trades with cutoff
         const trades = await prisma.trades.findMany({
             where: {
-                competition_id: competitionId,
+                timestamp: {
+                    lte: cutoffTime, // Only include trades on or before 1 PM UTC
+                },
             },
             select: {
                 id: true,
@@ -62,11 +60,19 @@ export async function GET() {
             }
         });
 
-        const stats: MicrositeStats = {
+        let stats: MicrositeStats = {
             totalNotionalTradedUsd,
             totalTrades,
             totalTokensTraded: tokenSet.size,
             totalChainsTraded: chainSet.size,
+        };
+
+        // Return empty object now for testing
+        stats = {
+            totalNotionalTradedUsd: 0,
+            totalTrades: 0,
+            totalTokensTraded: 0,
+            totalChainsTraded: 0,
         };
 
         return NextResponse.json(stats, { status: 200 });
